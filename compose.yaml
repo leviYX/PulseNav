@@ -1,0 +1,21 @@
+services:
+  postgis:
+    image: postgis/postgis:17-3.5
+    # 官方此版本镜像在 ARM 开发机上使用 amd64 模拟运行。
+    platform: linux/amd64
+    environment:
+      POSTGRES_DB: pulsegeo
+      POSTGRES_USER: pulsegeo
+      POSTGRES_PASSWORD: pulsegeo_local
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulsegeo -d pulsegeo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  postgis-data:
