@@ -12,6 +12,7 @@ LLM 负责语义理解与意图拆解，PulseGeo 负责可验证的空间计算�
 - 四个受控工具：球面距离计算、简单围栏点面判断、WGS84 → GCJ02、POI 复合查询。
 - POI 查询提供真实 PostGIS 仓储与显式开启的合成演示仓储，返回 GeoJSON FeatureCollection。
 - HTTP API、输入校验、请求取消、超时、Agent 并发与工具调用限额、优雅退出。
+- React + TypeScript Web 工作台：地图检索、围栏绘制、Agent 对话、工具执行记录与 GeoJSON 导出。
 - 单元测试、本地模型协议闭环测试、可配置的真实 PostGIS 集成测试。
 
 尚未实现：地址地理编码、Redis / BigCache、多边形孔洞和 MultiPolygon、游标分页、持久会话、多 Agent、指标与追踪、任意代码执行沙箱。首期没有动态代码执行需求，因此不引入沙箱。
@@ -28,6 +29,8 @@ POI_MODE=demo go run ./cmd/pulsegeo
 ```
 
 默认监听 `127.0.0.1:8080`。演示数据包含上海人民广场附近的三个合成 POI，不能用于真实商业决策。
+
+启动后在浏览器打开 [http://127.0.0.1:8080](http://127.0.0.1:8080) 即可使用 Web 工作台。前端生产产物已包含在仓库中，通过 `go:embed` 打包进服务，无需单独启动 Node 服务。
 
 ```bash
 curl http://127.0.0.1:8080/healthz
@@ -61,7 +64,47 @@ curl http://127.0.0.1:8080/v1/agent/run \
   -d '{"message":"使用 WGS84 坐标 [121.4737,31.2304]，查找周围 1000 米的 cafe，最多返回 5 个，并说明数据来源。"}'
 ```
 
-返回包含 `answer` 和 `tool_results`。每次请求是独立会话，不保留上一轮聊天历史。模型密钥与模型名称必须同时配置；同时留空时 Agent API 返回 503，其他 API 仍正常工作。配置文件示例见 [.env.example](.env.example)，程序不会自动加载 `.env`。
+返回包含 `answer` 和 `tool_results`，每个成功工具调用包含 `name`、`arguments`、`result` 和实际测量的 `elapsed_ms`。每次请求是独立会话，不保留上一轮聊天历史。模型密钥与模型名称必须同时配置；同时留空时 Agent API 返回 503，其他 API 仍正常工作。配置文件示例见 [.env.example](.env.example)，程序不会自动加载 `.env`。
+
+### Web 工作台
+
+- **区域探索**：点击地图选中心，也可手动输入经纬度、半径和 POI 分类，点击「检索区域」执行确定性查询，不需要模型密钥。
+- **围栏绘制**：点击「绘制围栏」，逐点选择至少三个顶点，点击「完成」或在地图外的非输入区域按 Enter；支持撤销顶点、取消绘制，Escape 放弃当前绘制。围栏与半径取交集。
+- **结果联动**：POI 同时显示在地图和列表，点击列表定位；查询条件改变后保留旧结果并明确标注，失败不会假装返回新结果。可导出完整 GeoJSON。
+- **任务对话**：可选择附带当前 WGS84 地图范围。Agent 未配置时显示原因并禁用发送；配置后显示真实工具调用参数、耗时和结果，POI 工具参数可用于同步地图。
+- **执行记录**：区分请求总耗时与服务端测量的工具耗时，展开查看参数及原始输出。记录与对话仅在当前页面内存中保存，刷新即清空；显示历史不代表模型具备跨请求记忆。
+- **请求取消**：点击「停止请求」中止请求，迟到响应不会覆盖结果；控制条件和地图点选在请求执行时锁定。
+
+地图使用 MapLibre GL JS。默认底图来自 OpenStreetMap 公共瓦片服务，保留署名并仅用于低流量开发演示；正式部署需依据[瓦片使用政策](https://operations.osmfoundation.org/policies/tiles/)选择自建或具有相应授权与容量的瓦片源，修改 `web/src/MapPanel.tsx` 中的底图配置后重建。浏览器会将可视地图瓦片请求发送到该第三方服务，模型密钥始终只保留在 Go 服务端。
+
+可关闭底图使用坐标网格，底图请求失败不会阻止空间 API。WebGL 不可用时切换为明确标注的 SVG 坐标示意图：支持点选、围栏与 POI 展示，不提供地图平移缩放。半径图层是球面预览，精确过滤以服务端结果为准。地图采用 Web Mercator 投影，不能作为极区或跨日期变更线复杂几何的可视化验收工具。
+
+前端开发需要 Node.js 22.12+（推荐当前 Node.js LTS）：
+
+```bash
+# 第一个终端：API 服务，Vite 默认代理到此地址。
+POI_MODE=demo go run ./cmd/pulsegeo
+
+# 第二个终端：前端热更新。
+cd web
+npm ci
+npm run dev
+```
+
+开发模式打开 Vite 输出的地址，API 与 `/healthz` 由 Vite 代理，默认连接 `127.0.0.1:8080`。API 修改监听端口时，同步修改 `web/vite.config.ts` 的代理目标。
+
+修改前端后需重建产物，再重启 Go 服务；运行中的二进制不会实时读取磁盘上的新前端文件：
+
+```bash
+cd web
+npm test
+npm run build
+cd ..
+go build -o /tmp/pulsegeo ./cmd/pulsegeo
+POI_MODE=demo /tmp/pulsegeo
+```
+
+`web/dist/` 是嵌入式构建输入，随源码一起版本管理。CI 重新构建前端后执行 Go 检查；不能删除该目录后直接运行 Go 构建。
 
 ### 使用 PostGIS
 
@@ -288,6 +331,9 @@ internal/postgres/    # PostgreSQL / PostGIS 适配器
 pkg/spatial/          # 距离、点面关系与坐标转换
 migrations/           # 数据表、约束与空间索引
 docs/superpowers/     # 本次设计与实施计划
+web/src/              # React 工作台与组件/空间参数测试
+web/dist/             # 版本管理的前端产物，嵌入 Go 二进制
+web/assets.go         # 同源静态资源服务
 ```
 
 后续按需增加 `api/` 协议定义、`internal/geocoding/`、`internal/cache/` 和 `internal/provider/`，不预建空模块。以下章节中涉及缓存、地理编码、复杂几何和观测的内容均为后续设计要求。

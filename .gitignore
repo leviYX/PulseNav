@@ -32,3 +32,9 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Frontend dependencies and local test artifacts; dist is embedded and versioned.
+web/node_modules/
+web/*.tsbuildinfo
+web/test-results/
+web/playwright-report/

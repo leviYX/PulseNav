@@ -28,6 +28,19 @@ jobs:
       TEST_DATABASE_URL: postgres://pulsegeo_test:local_test_only@127.0.0.1:5432/pulsegeo_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm test
+        working-directory: web
+      - run: npm run format:check
+        working-directory: web
+      - run: npm run build
+        working-directory: web
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'

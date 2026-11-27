@@ -89,6 +89,20 @@ func TestAgentDependencyErrorsKeepTheirPublicClassification(t *testing.T) {
 	}
 }
 
+func TestWorkbenchDoesNotSwallowMissingAPIs(t *testing.T) {
+	h := New(poi.NewService(poi.NewDemoRepository()), nil)
+	for _, tc := range []struct {
+		path   string
+		status int
+	}{{"/", 200}, {"/v1/missing", 404}, {"/missing.js", 404}} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, tc.path, nil))
+		if w.Code != tc.status {
+			t.Errorf("%s: %d", tc.path, w.Code)
+		}
+	}
+}
+
 func TestAgentConcurrencyIsBounded(t *testing.T) {
 	entered := make(chan struct{}, 8)
 	release := make(chan struct{})

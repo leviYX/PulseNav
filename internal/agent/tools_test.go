@@ -50,6 +50,26 @@ func TestToolBudgetAndCancellation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if len(record.results) != 8 {
+		t.Fatalf("trace results=%d", len(record.results))
+	}
+	encoded, err := json.Marshal(record.results[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var observed struct {
+		Arguments struct {
+			From [2]float64 `json:"from"`
+			To   [2]float64 `json:"to"`
+		} `json:"arguments"`
+		ElapsedMS *float64 `json:"elapsed_ms"`
+	}
+	if err = json.Unmarshal(encoded, &observed); err != nil {
+		t.Fatal(err)
+	}
+	if observed.Arguments.To != ([2]float64{1, 0}) || observed.ElapsedMS == nil || *observed.ElapsedMS < 0 {
+		t.Fatalf("missing tool execution provenance: %s", encoded)
+	}
 	if _, err := distance.InvokableRun(ctx, `{"from":[0,0],"to":[1,0]}`); !errors.Is(err, domain.ErrRateLimited) {
 		t.Fatal(err)
 	}

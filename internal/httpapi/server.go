@@ -13,6 +13,7 @@ import (
 	"pulsenav/internal/agent"
 	"pulsenav/internal/domain"
 	"pulsenav/internal/spatialsvc"
+	"pulsenav/web"
 )
 
 type Runner interface {
@@ -28,6 +29,7 @@ type runRequest struct {
 
 func New(search Searcher, runner Runner) http.Handler {
 	mux := http.NewServeMux()
+	mux.Handle("/", web.Handler())
 	slots := make(chan struct{}, 8)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"status": "ok", "poi_source": search.Source(), "agent_enabled": runner != nil})

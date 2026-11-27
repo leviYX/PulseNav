@@ -30,8 +30,10 @@ type Config struct {
 }
 type Agent struct{ runner *react.Agent }
 type ToolResult struct {
-	Name   string          `json:"name"`
-	Result json.RawMessage `json:"result"`
+	Name      string          `json:"name"`
+	Result    json.RawMessage `json:"result"`
+	Arguments json.RawMessage `json:"arguments"`
+	ElapsedMS float64         `json:"elapsed_ms"`
 }
 type Result struct {
 	Answer      string       `json:"answer"`
@@ -125,10 +127,11 @@ func (t *tracedTool) InvokableRun(ctx context.Context, arguments string, opts ..
 			return "", domain.ErrRateLimited
 		}
 	}
+	started := time.Now()
 	result, err := t.InvokableTool.InvokableRun(ctx, arguments, opts...)
 	if err == nil && record != nil {
 		record.mu.Lock()
-		record.results = append(record.results, ToolResult{Name: t.name, Result: json.RawMessage(result)})
+		record.results = append(record.results, ToolResult{Name: t.name, Result: json.RawMessage(result), Arguments: json.RawMessage(arguments), ElapsedMS: float64(time.Since(started).Nanoseconds()) / 1e6})
 		record.mu.Unlock()
 	}
 	return result, err
